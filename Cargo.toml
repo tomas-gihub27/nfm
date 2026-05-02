@@ -1,0 +1,27 @@
+[package]
+name = "nfm"
+version = "0.1.0"
+edition = "2021"
+authors = ["AI Assistant"]
+description = "NeoFM - Modern TUI file manager with built-in editor"
+
+[dependencies]
+ratatui = "0.26"
+crossterm = "0.27"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+clap = { version = "4.4", features = ["derive"] }
+sysinfo = "0.30"
+directories = "5.0"
+open = "5.0"
+unicode-width = "0.1"
+chrono = "0.4"
+
+# We'll use simple custom highlighting or basic regex if syntect is too heavy, 
+# but let's try a lightweight approach or just basic colors for editor first to avoid massive compilation.
+# Actually, the user asked for syntax highlighting, syntect is the standard.
+syntect = "5.2"
+
+[profile.release]
+opt-level = 3
+lto = true

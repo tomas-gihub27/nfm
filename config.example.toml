@@ -1,0 +1,21 @@
+[theme]
+bg = "Reset"
+fg = "Reset"
+primary = "Cyan"
+secondary = "DarkGray"
+highlight_bg = "Blue"
+highlight_fg = "White"
+border = "DarkGray"
+error = "Red"
+dir_color = "Cyan"
+file_color = "Reset"
+symlink_color = "Magenta"
+
+[editor]
+tab_size = 4
+show_line_numbers = true
+syntax_highlighting = true
+
+[file_browser]
+show_hidden = false
+confirm_delete = true
