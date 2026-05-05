@@ -81,7 +81,7 @@ pub mod file_browser {
 
     #[derive(Clone)]
     pub enum DialogAction {
-        NewFile, NewFolder, Rename(PathBuf), GitClone, Wget, Symlink(PathBuf), Filter, Search,
+        NewFile, NewFolder, Rename(PathBuf), GitClone, Wget, Symlink(PathBuf), Filter, Search, Duplicate(PathBuf),
     }
     
     #[derive(Clone)]
@@ -125,7 +125,11 @@ pub mod file_browser {
                 should_quit: false,
                 menu_items: vec![
                     "--- FILES ---".to_string(), 
+                    "Open / Execute".to_string(),
+                    "New File".to_string(),
+                    "New Folder".to_string(),
                     "Copy Path".to_string(), 
+                    "Duplicate".to_string(),
                     "Create Symlink".to_string(), 
                     "Change Permissions".to_string(), 
                     "Properties".to_string(), 
@@ -266,29 +270,34 @@ pub mod file_browser {
                     KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('o') | KeyCode::Char('O') => close_menu = true,
                     KeyCode::Up => { if *idx > 1 { *idx -= 1; } if self.menu_items[*idx].starts_with("---") && *idx > 1 { *idx -= 1; } },
                     KeyCode::Down => { if *idx + 1 < self.menu_items.len() { *idx += 1; } if self.menu_items[*idx].starts_with("---") && *idx + 1 < self.menu_items.len() { *idx += 1; } },
-                    KeyCode::Right => { if *idx < 6 { *idx = 7; } else if *idx < 14 { *idx = 15; } },
-                    KeyCode::Left => { if *idx > 14 { *idx = 7; } else if *idx > 6 { *idx = 1; } },
+                    KeyCode::Right => { if *idx < 10 { *idx = 11; } else if *idx < 18 { *idx = 19; } },
+                    KeyCode::Left => { if *idx > 18 { *idx = 11; } else if *idx > 10 { *idx = 1; } },
                     KeyCode::Enter => {
                         match *idx {
-                            1 => { if let Some(item) = self.items.get(self.selected_index) { clipboard.set_text(item.path.to_string_lossy().to_string()); req = Some(TabRequest::SetStatus("Path copied".to_string())); } }
-                            2 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Symlink name:".to_string(), input: format!("{}_link", item.name), action: DialogAction::Symlink(item.path.clone()) }); return None; } }
-                            3 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = self.init_permissions(item.clone()); return None; } }
-                            4 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Metadata(item.clone()); return None; } }
-                            5 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Algorithm".to_string(), options: vec!["MD5".to_string(), "SHA256".to_string()], selected: 0, action: SelectionAction::Checksum(item.path.clone()) }; return None; } }
-                            7 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Archive type".to_string(), options: vec!["ZIP".to_string(), "TAR".to_string(), "GZIP".to_string()], selected: 0, action: SelectionAction::Archive(item.path.clone()) }; return None; } }
-                            8 => { if let Some(item) = self.items.get(self.selected_index) { if item.name.ends_with(".zip") || item.name.ends_with(".tar") || item.name.ends_with(".gz") { req = Some(TabRequest::StartTask { task_type: TaskType::Unzip, path: item.path.clone(), target: self.current_dir.clone() }); } } }
-                            10 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Git Clone URL:".to_string(), input: String::new(), action: DialogAction::GitClone }); return None; }
-                            11 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Wget URL:".to_string(), input: String::new(), action: DialogAction::Wget }); return None; }
-                            12 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Encryption type".to_string(), options: vec!["XOR (Fast)".to_string(), "AES (Placeholder)".to_string()], selected: 0, action: SelectionAction::Encrypt(item.path.clone()) }; return None; } }
-                            13 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Encryption type".to_string(), options: vec!["XOR".to_string(), "AES".to_string()], selected: 0, action: SelectionAction::Decrypt(item.path.clone()) }; return None; } }
-                            15 => { self.show_hidden = !self.show_hidden; self.refresh(); req = Some(TabRequest::SetStatus(format!("Hidden: {}", if self.show_hidden { "Yes" } else { "No" }))); }
-                            16 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Filter:".to_string(), input: self.filter.clone(), action: DialogAction::Filter }); return None; }
-                            17 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Search pattern:".to_string(), input: String::new(), action: DialogAction::Search }); return None; }
-                            18 => { self.refresh(); req = Some(TabRequest::SetStatus("Refreshed".to_string())); }
-                            19 => { if cfg!(target_os = "windows") { let _ = std::process::Command::new("cmd").current_dir(&self.current_dir).spawn(); } else { let _ = std::process::Command::new("sh").arg("-c").arg("$TERM").current_dir(&self.current_dir).spawn(); } req = Some(TabRequest::SetStatus("Terminal opened".to_string())); }
-                            20 => { let cp = crate::config::get_config_path(); return Some(TabRequest::OpenEditor(cp)); }
-                            21 => { self.show_preview = !self.show_preview; req = Some(TabRequest::SetStatus(format!("Preview: {}", if self.show_preview { "On" } else { "Off" }))); }
-                            22 => { self.mode = BrowserMode::Selection { title: "Sort by".to_string(), options: vec!["Name (A-Z)".to_string(), "Name (Z-A)".to_string(), "Size (Smallest)".to_string(), "Size (Largest)".to_string(), "Date (Oldest)".to_string(), "Date (Newest)".to_string()], selected: 0, action: SelectionAction::SortMode }; return None; }
+                            1 => { if let Some(item) = self.items.get(self.selected_index) { let _ = open::that(&item.path); req = Some(TabRequest::SetStatus("Opened externally".to_string())); } }
+                            2 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "New file name:".to_string(), input: String::new(), action: DialogAction::NewFile }); return None; }
+                            3 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "New folder name:".to_string(), input: String::new(), action: DialogAction::NewFolder }); return None; }
+                            4 => { if let Some(item) = self.items.get(self.selected_index) { clipboard.set_text(item.path.to_string_lossy().to_string()); req = Some(TabRequest::SetStatus("Path copied".to_string())); } }
+                            5 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Duplicate as:".to_string(), input: format!("{}_copy", item.name), action: DialogAction::Duplicate(item.path.clone()) }); return None; } }
+                            6 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Symlink name:".to_string(), input: format!("{}_link", item.name), action: DialogAction::Symlink(item.path.clone()) }); return None; } }
+                            7 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = self.init_permissions(item.clone()); return None; } }
+                            8 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Metadata(item.clone()); return None; } }
+                            9 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Algorithm".to_string(), options: vec!["MD5".to_string(), "SHA256".to_string()], selected: 0, action: SelectionAction::Checksum(item.path.clone()) }; return None; } }
+                            11 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Archive type".to_string(), options: vec!["ZIP".to_string(), "TAR".to_string(), "GZIP".to_string()], selected: 0, action: SelectionAction::Archive(item.path.clone()) }; return None; } }
+                            12 => { if let Some(item) = self.items.get(self.selected_index) { if item.name.ends_with(".zip") || item.name.ends_with(".tar") || item.name.ends_with(".gz") { req = Some(TabRequest::StartTask { task_type: TaskType::Unzip, path: item.path.clone(), target: self.current_dir.clone() }); } } }
+                            13 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Rename pattern:".to_string(), input: String::new(), action: DialogAction::NewFile }); return None; }
+                            14 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Git Clone URL:".to_string(), input: String::new(), action: DialogAction::GitClone }); return None; }
+                            15 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Wget URL:".to_string(), input: String::new(), action: DialogAction::Wget }); return None; }
+                            16 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Encryption type".to_string(), options: vec!["XOR (Fast)".to_string(), "AES (Placeholder)".to_string()], selected: 0, action: SelectionAction::Encrypt(item.path.clone()) }; return None; } }
+                            17 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Encryption type".to_string(), options: vec!["XOR".to_string(), "AES".to_string()], selected: 0, action: SelectionAction::Decrypt(item.path.clone()) }; return None; } }
+                            19 => { self.show_hidden = !self.show_hidden; self.refresh(); req = Some(TabRequest::SetStatus(format!("Hidden: {}", if self.show_hidden { "Yes" } else { "No" }))); }
+                            20 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Filter:".to_string(), input: self.filter.clone(), action: DialogAction::Filter }); return None; }
+                            21 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Search pattern:".to_string(), input: String::new(), action: DialogAction::Search }); return None; }
+                            22 => { self.refresh(); req = Some(TabRequest::SetStatus("Refreshed".to_string())); }
+                            23 => { if cfg!(target_os = "windows") { let _ = std::process::Command::new("cmd").current_dir(&self.current_dir).spawn(); } else { let _ = std::process::Command::new("sh").arg("-c").arg("$TERM").current_dir(&self.current_dir).spawn(); } req = Some(TabRequest::SetStatus("Terminal opened".to_string())); }
+                            24 => { let cp = crate::config::get_config_path(); return Some(TabRequest::OpenEditor(cp)); }
+                            25 => { self.show_preview = !self.show_preview; req = Some(TabRequest::SetStatus(format!("Preview: {}", if self.show_preview { "On" } else { "Off" }))); }
+                            26 => { self.mode = BrowserMode::Selection { title: "Sort by".to_string(), options: vec!["Name (A-Z)".to_string(), "Name (Z-A)".to_string(), "Size (Smallest)".to_string(), "Size (Largest)".to_string(), "Date (Oldest)".to_string(), "Date (Newest)".to_string()], selected: 0, action: SelectionAction::SortMode }; return None; }
                             _ => {}
                         }
                         close_menu = true;
@@ -422,6 +431,17 @@ pub mod file_browser {
                                 DialogAction::NewFile => { let _ = fs::File::create(self.current_dir.join(&input)); }
                                 DialogAction::NewFolder => { let _ = fs::create_dir_all(self.current_dir.join(&input)); }
                                 DialogAction::Rename(old_path) => { let _ = fs::rename(old_path, self.current_dir.join(&input)); }
+                                DialogAction::Duplicate(old_path) => { 
+                                    let target_path = self.current_dir.join(&input);
+                                    if old_path.is_dir() {
+                                        // A simple duplicate for dirs isn't easily done without recursive copy, 
+                                        // so we will just create the dir and let user copy contents if needed,
+                                        // or use task system. For simplicity, request task system:
+                                        req = Some(TabRequest::StartTask { task_type: TaskType::Copy, path: old_path.clone(), target: target_path });
+                                    } else {
+                                        let _ = fs::copy(old_path, target_path); 
+                                    }
+                                }
                                 DialogAction::GitClone => { req = Some(TabRequest::StartTask { task_type: TaskType::GitClone(input.clone()), path: PathBuf::new(), target: self.current_dir.clone() }); }
                                 DialogAction::Wget => { req = Some(TabRequest::StartTask { task_type: TaskType::Wget(input.clone()), path: PathBuf::new(), target: self.current_dir.clone() }); }
                                 DialogAction::Symlink(src) => { 

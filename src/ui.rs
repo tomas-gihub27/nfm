@@ -144,9 +144,33 @@ fn draw_file_browser(f: &mut Frame, state: &mut crate::file_browser::file_browse
             let columns = Layout::default().direction(Direction::Horizontal).margin(2).constraints([Constraint::Percentage(33), Constraint::Percentage(33), Constraint::Percentage(34)]).split(menu_area);
             
             // Re-render columns with better design
-            let c1 = vec![ListItem::new(" 󰈔 FILES ").cyan().bold().bg(Color::Rgb(30, 40, 60)), render_menu_item("Copy Path", 1, *idx), render_menu_item("Create Symlink", 2, *idx), render_menu_item("Change Permissions", 3, *idx), render_menu_item("Properties", 4, *idx), render_menu_item("Checksum", 5, *idx)];
-            let c2 = vec![ListItem::new(" 󰘦 TOOLS ").yellow().bold().bg(Color::Rgb(50, 45, 20)), render_menu_item("Compress", 7, *idx), render_menu_item("Extract", 8, *idx), render_menu_item("Bulk Rename", 9, *idx), render_menu_item("Git Clone", 10, *idx), render_menu_item("Wget Download", 11, *idx), render_menu_item("Encrypt", 12, *idx), render_menu_item("Decrypt", 13, *idx)];
-            let c3 = vec![ListItem::new(" 󰨇 VIEW ").magenta().bold().bg(Color::Rgb(50, 25, 50)), render_menu_item("Hidden Files", 15, *idx), render_menu_item("Filter", 16, *idx), render_menu_item("Search", 17, *idx), render_menu_item("Refresh Panel", 18, *idx), render_menu_item("Terminal", 19, *idx), render_menu_item("Settings", 20, *idx), render_menu_item("Preview", 21, *idx), render_menu_item("Sort", 22, *idx)];
+            let c1 = vec![ListItem::new(" 󰈔 FILES ").cyan().bold().bg(Color::Rgb(30, 40, 60)), 
+                render_menu_item("Open / Execute", 1, *idx), 
+                render_menu_item("New File", 2, *idx),
+                render_menu_item("New Folder", 3, *idx),
+                render_menu_item("Copy Path", 4, *idx), 
+                render_menu_item("Duplicate", 5, *idx),
+                render_menu_item("Create Symlink", 6, *idx), 
+                render_menu_item("Change Permissions", 7, *idx), 
+                render_menu_item("Properties", 8, *idx), 
+                render_menu_item("Checksum", 9, *idx)];
+            let c2 = vec![ListItem::new(" 󰘦 TOOLS ").yellow().bold().bg(Color::Rgb(50, 45, 20)), 
+                render_menu_item("Compress", 11, *idx), 
+                render_menu_item("Extract", 12, *idx), 
+                render_menu_item("Bulk Rename", 13, *idx), 
+                render_menu_item("Git Clone", 14, *idx), 
+                render_menu_item("Wget Download", 15, *idx), 
+                render_menu_item("Encrypt", 16, *idx), 
+                render_menu_item("Decrypt", 17, *idx)];
+            let c3 = vec![ListItem::new(" 󰨇 VIEW ").magenta().bold().bg(Color::Rgb(50, 25, 50)), 
+                render_menu_item("Hidden Files", 19, *idx), 
+                render_menu_item("Filter", 20, *idx), 
+                render_menu_item("Search", 21, *idx), 
+                render_menu_item("Refresh Panel", 22, *idx), 
+                render_menu_item("Terminal", 23, *idx), 
+                render_menu_item("Settings", 24, *idx), 
+                render_menu_item("Preview", 25, *idx), 
+                render_menu_item("Sort", 26, *idx)];
             
             f.render_widget(List::new(c1), columns[0]);
             f.render_widget(List::new(c2), columns[1]);
@@ -257,7 +281,7 @@ fn draw_editor(f: &mut Frame, state: &mut crate::editor::editor::EditorState, sy
     if state.cursor_y < state.scroll_y { state.scroll_y = state.cursor_y; } else if state.cursor_y >= state.scroll_y + height { state.scroll_y = state.cursor_y - height + 1; }
     if state.cursor_x < state.scroll_x { state.scroll_x = state.cursor_x; } else if state.cursor_x >= state.scroll_x + width { state.scroll_x = state.cursor_x - width + 1; }
     let syntax = state.file_path.as_ref().and_then(|p| p.extension()).and_then(|ext| syntax_set.find_syntax_by_extension(ext.to_str().unwrap_or(""))).or_else(|| if !state.content.is_empty() { syntax_set.find_syntax_by_first_line(&state.content[0]) } else { None }).unwrap_or_else(|| syntax_set.find_syntax_plain_text());
-    let mut h = HighlightLines::new(syntax, &theme_set.themes["base16-ocean.dark"]);
+    let mut h = HighlightLines::new(syntax, &theme_set.themes["base16-mocha.dark"]);
     let full_content = state.content.join("\n");
     let mut lines = Vec::new(); let mut line_num = 0;
     for line in LinesWithEndings::from(&full_content) {
@@ -336,7 +360,7 @@ fn draw_preview(f: &mut Frame, item: &FileItem, syntax_set: &SyntaxSet, theme_se
         Err(_) => { f.render_widget(Paragraph::new("\n  (Binary file or missing permissions)").block(block).dark_gray(), area); return; }
     };
     let syntax = item.path.extension().and_then(|ext| syntax_set.find_syntax_by_extension(ext.to_str().unwrap_or(""))).or_else(|| { let lines: Vec<&str> = content.lines().collect(); if !lines.is_empty() { syntax_set.find_syntax_by_first_line(lines[0]) } else { None } }).unwrap_or_else(|| syntax_set.find_syntax_plain_text());
-    let mut h = HighlightLines::new(syntax, &theme_set.themes["base16-ocean.dark"]);
+    let mut h = HighlightLines::new(syntax, &theme_set.themes["base16-mocha.dark"]);
     let mut lines = Vec::new();
     for line in LinesWithEndings::from(&content) {
         let ranges = h.highlight_line(line, syntax_set).unwrap_or_default();
