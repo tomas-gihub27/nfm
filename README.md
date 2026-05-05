@@ -1,5 +1,9 @@
 # NeoFM (nfm)
-<img width="1235" height="686" alt="NeoFM Screenshot" src="https://github.com/user-attachments/assets/83f51e02-c2e1-4141-ae52-982a64927d86" />
+
+<img width="1730" height="1065" alt="nfm0" src="https://github.com/user-attachments/assets/88cb3856-0c4e-4006-94c2-d50a7018184c" />
+<img width="1745" height="1071" alt="nfm1" src="https://github.com/user-attachments/assets/7bbbe3f8-b8cc-4b3a-af32-128a46a57f9b" />
+<img width="1742" height="1077" alt="nfm2" src="https://github.com/user-attachments/assets/02b5d44a-53f9-4175-b224-80bd791a43bc" />
+
 
 NeoFM is a modern, fast, and feature-rich TUI (Text User Interface) file manager and text editor built in Rust. It runs seamlessly on both Linux and Windows.
 
