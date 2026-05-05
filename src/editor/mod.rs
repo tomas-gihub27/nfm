@@ -30,7 +30,7 @@ pub mod editor {
                             }
                         }
                         Err(e) => {
-                            content = vec![format!("(Chyba čtení: Tento soubor možná není textový nebo k němu nemáte práva. Detail: {})", e)];
+                            content = vec![format!("(Read error: This file might not be a text file or you don't have permissions. Detail: {})", e)];
                         }
                     }
                 }

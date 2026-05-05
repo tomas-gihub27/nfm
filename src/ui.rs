@@ -144,9 +144,9 @@ fn draw_file_browser(f: &mut Frame, state: &mut crate::file_browser::file_browse
             let columns = Layout::default().direction(Direction::Horizontal).margin(2).constraints([Constraint::Percentage(33), Constraint::Percentage(33), Constraint::Percentage(34)]).split(menu_area);
             
             // Re-render columns with better design
-            let c1 = vec![ListItem::new(" 󰈔 SOUBORY ").cyan().bold().bg(Color::Rgb(30, 40, 60)), render_menu_item("Kopírovat cestu", 1, *idx), render_menu_item("Vytvořit Symlink", 2, *idx), render_menu_item("Změnit práva", 3, *idx), render_menu_item("Vlastnosti", 4, *idx), render_menu_item("Kontrolní součet", 5, *idx)];
-            let c2 = vec![ListItem::new(" 󰘦 NÁSTROJE ").yellow().bold().bg(Color::Rgb(50, 45, 20)), render_menu_item("Zabalit", 7, *idx), render_menu_item("Rozbalit", 8, *idx), render_menu_item("Hromadné přejm.", 9, *idx), render_menu_item("Git Clone", 10, *idx), render_menu_item("Wget Download", 11, *idx), render_menu_item("Zašifrovat", 12, *idx), render_menu_item("Rozšifrovat", 13, *idx)];
-            let c3 = vec![ListItem::new(" 󰨇 ZOBRAZENÍ ").magenta().bold().bg(Color::Rgb(50, 25, 50)), render_menu_item("Skryté soubory", 15, *idx), render_menu_item("Filtrovat", 16, *idx), render_menu_item("Hledat", 17, *idx), render_menu_item("Obnovit panel", 18, *idx), render_menu_item("Terminál", 19, *idx), render_menu_item("Nastavení", 20, *idx), render_menu_item("Náhled", 21, *idx), render_menu_item("Seřadit", 22, *idx)];
+            let c1 = vec![ListItem::new(" 󰈔 FILES ").cyan().bold().bg(Color::Rgb(30, 40, 60)), render_menu_item("Copy Path", 1, *idx), render_menu_item("Create Symlink", 2, *idx), render_menu_item("Change Permissions", 3, *idx), render_menu_item("Properties", 4, *idx), render_menu_item("Checksum", 5, *idx)];
+            let c2 = vec![ListItem::new(" 󰘦 TOOLS ").yellow().bold().bg(Color::Rgb(50, 45, 20)), render_menu_item("Compress", 7, *idx), render_menu_item("Extract", 8, *idx), render_menu_item("Bulk Rename", 9, *idx), render_menu_item("Git Clone", 10, *idx), render_menu_item("Wget Download", 11, *idx), render_menu_item("Encrypt", 12, *idx), render_menu_item("Decrypt", 13, *idx)];
+            let c3 = vec![ListItem::new(" 󰨇 VIEW ").magenta().bold().bg(Color::Rgb(50, 25, 50)), render_menu_item("Hidden Files", 15, *idx), render_menu_item("Filter", 16, *idx), render_menu_item("Search", 17, *idx), render_menu_item("Refresh Panel", 18, *idx), render_menu_item("Terminal", 19, *idx), render_menu_item("Settings", 20, *idx), render_menu_item("Preview", 21, *idx), render_menu_item("Sort", 22, *idx)];
             
             f.render_widget(List::new(c1), columns[0]);
             f.render_widget(List::new(c2), columns[1]);
@@ -161,8 +161,8 @@ fn draw_file_browser(f: &mut Frame, state: &mut crate::file_browser::file_browse
         BrowserMode::Dialog(DialogType::DeleteConfirm) => {
             let area = centered_rect(40, 10, f.size());
             f.render_widget(Clear, area);
-            f.render_widget(Paragraph::new("\n  Opravdu smazat vybrané položky? (y/n)")
-                .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title(" 󰆴 POTVRZENÍ ").border_style(Style::default().fg(Color::Red))), area);
+            f.render_widget(Paragraph::new("\n  Really delete selected items? (y/n)")
+                .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title(" 󰆴 CONFIRMATION ").border_style(Style::default().fg(Color::Red))), area);
         }
         BrowserMode::Metadata(item) => draw_metadata(f, item, f.size()),
         BrowserMode::Permissions { item, grid, row, col } => draw_permissions(f, item, grid, *row, *col, f.size()),
@@ -206,11 +206,11 @@ fn draw_metadata(f: &mut Frame, item: &FileItem, area: Rect) {
     f.render_widget(Clear, area);
     let mod_time: DateTime<Local> = item.modified.into();
     let text = vec![
-        Line::from(vec![Span::styled("  NÁZEV:    ", Style::default().cyan()), Span::styled(&item.name, Style::default().bold())]),
-        Line::from(vec![Span::styled("  CESTA:    ", Style::default().cyan()), Span::raw(item.path.to_string_lossy())]),
-        Line::from(vec![Span::styled("  VELIKOST: ", Style::default().cyan()), Span::raw(crate::utils::format_size(item.size))]),
-        Line::from(vec![Span::styled("  TYP:      ", Style::default().cyan()), Span::raw(if item.is_dir { "Složka" } else { "Soubor" })]),
-        Line::from(vec![Span::styled("  ZMĚNĚNO:  ", Style::default().cyan()), Span::raw(mod_time.format("%Y-%m-%d %H:%M:%S").to_string())]),
+        Line::from(vec![Span::styled("  NAME:     ", Style::default().cyan()), Span::styled(&item.name, Style::default().bold())]),
+        Line::from(vec![Span::styled("  PATH:     ", Style::default().cyan()), Span::raw(item.path.to_string_lossy())]),
+        Line::from(vec![Span::styled("  SIZE:     ", Style::default().cyan()), Span::raw(crate::utils::format_size(item.size))]),
+        Line::from(vec![Span::styled("  TYPE:      ", Style::default().cyan()), Span::raw(if item.is_dir { "Folder" } else { "File" })]),
+        Line::from(vec![Span::styled("  MODIFIED:  ", Style::default().cyan()), Span::raw(mod_time.format("%Y-%m-%d %H:%M:%S").to_string())]),
     ];
     f.render_widget(Paragraph::new(text).block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title(" 󰋽 INFO ").border_style(Style::default().fg(Color::Green)).padding(Padding::uniform(1))), area);
 }
@@ -218,7 +218,7 @@ fn draw_metadata(f: &mut Frame, item: &FileItem, area: Rect) {
 fn draw_permissions(f: &mut Frame, item: &FileItem, grid: &[[bool; 3]; 3], row: usize, col: usize, area: Rect) {
     let area = centered_rect(60, 50, area);
     f.render_widget(Clear, area);
-    let rows = vec!["Vlastník", "Skupina", "Ostatní"].into_iter().enumerate().map(|(r, name)| {
+    let rows = vec!["Owner", "Group", "Others"].into_iter().enumerate().map(|(r, name)| {
         let cells = vec![Cell::from(name)].into_iter().chain((0..3).map(|c| {
             let style = if r == row && c == col { Style::default().bg(Color::Rgb(0, 120, 215)).fg(Color::White).bold() } else { Style::default().fg(if grid[r][c] { Color::Green } else { Color::DarkGray }) };
             Cell::from(if grid[r][c] { " 󰄬 " } else { " 󰄱 " }).style(style)
@@ -226,8 +226,8 @@ fn draw_permissions(f: &mut Frame, item: &FileItem, grid: &[[bool; 3]; 3], row: 
         Row::new(cells)
     });
     let table = Table::new(rows, [Constraint::Percentage(40), Constraint::Percentage(20), Constraint::Percentage(20), Constraint::Percentage(20)])
-        .header(Row::new(vec!["Kategorie", "Read", "Write", "Exec"]).cyan().bold())
-        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Double).title(format!(" 󰒓 PRÁVA: {} ", item.name)).border_style(Style::default().fg(Color::Yellow)));
+        .header(Row::new(vec!["Category", "Read", "Write", "Exec"]).cyan().bold())
+        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Double).title(format!(" 󰒓 PERMISSIONS: {} ", item.name)).border_style(Style::default().fg(Color::Yellow)));
     f.render_widget(table, area);
 }
 
@@ -237,16 +237,16 @@ fn draw_help(f: &mut Frame, area: Rect) {
     let text = vec![
         Line::from(vec![Span::styled(" 󱊖 NEOFM LEGENDARY KEYS ", Style::default().bg(Color::Cyan).fg(Color::Black).bold())]),
         Line::from(""),
-        Line::from(vec![Span::styled(" GLOBÁLNÍ: ", Style::default().magenta().bold())]),
-        Line::from("   Tab        - Přepnout kartu"),
-        Line::from("   Ctrl+T / W - Nová / Zavřít kartu"),
-        Line::from("   H / F1     - Nápověda"),
+        Line::from(vec![Span::styled(" GLOBAL: ", Style::default().magenta().bold())]),
+        Line::from("   Tab        - Switch tab"),
+        Line::from("   Ctrl+T / W - New / Close tab"),
+        Line::from("   H / F1     - Help"),
         Line::from(""),
-        Line::from(vec![Span::styled(" NAVIGACE: ", Style::default().cyan().bold())]),
-        Line::from("   Šipky      - Pohyb"),
-        Line::from("   Enter      - Vstoupit / Upravit"),
-        Line::from("   Mezerník   - Označit soubor"),
-        Line::from("   C / X / V  - Kopírovat / Vyjmout / Vložit"),
+        Line::from(vec![Span::styled(" NAVIGATION: ", Style::default().cyan().bold())]),
+        Line::from("   Arrows      - Movement"),
+        Line::from("   Enter      - Enter / Edit"),
+        Line::from("   Space   - Select file"),
+        Line::from("   C / X / V  - Copy / Cut / Paste"),
         Line::from("   O          - Command Center"),
     ];
     f.render_widget(Paragraph::new(text).block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title(" 󰘥 HELP ").border_style(Style::default().fg(Color::Blue)).padding(Padding::uniform(1))), area);
@@ -312,28 +312,28 @@ fn draw_progress_bar(f: &mut Frame, task: &BackgroundTask, anim_frame: usize, ar
     let bar = format!("  [{}{}]", "█".repeat(filled), " ".repeat(width - filled));
     f.render_widget(Paragraph::new(bar).style(Style::default().fg(Color::Rgb(0, 255, 150))), inner[1]);
     let eta = if task.progress > 0.01 { format!("{}s", (task.start_time.elapsed().as_secs_f64() / task.progress - task.start_time.elapsed().as_secs_f64()) as u32) } else { "..." .to_string() };
-    f.render_widget(Paragraph::new(format!("{}%  |  Zbývá cca: {}  ", (task.progress * 100.0) as u32, eta)).alignment(Alignment::Right).fg(Color::Rgb(150, 150, 150)), inner[2]);
+    f.render_widget(Paragraph::new(format!("{}%  |  Remaining approx: {}  ", (task.progress * 100.0) as u32, eta)).alignment(Alignment::Right).fg(Color::Rgb(150, 150, 150)), inner[2]);
 }
 
 fn draw_error_popup(f: &mut Frame, err_msg: &str, area: Rect) {
     let area = centered_rect(55, 25, area);
     f.render_widget(Clear, area);
-    f.render_widget(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title(" 󰅚 CHYBA ").border_style(Style::default().fg(Color::Rgb(255, 70, 70))), area);
+    f.render_widget(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title(" 󰅚 ERROR ").border_style(Style::default().fg(Color::Rgb(255, 70, 70))), area);
     let inner = Layout::default().direction(Direction::Vertical).margin(2).constraints([Constraint::Min(1), Constraint::Length(1)]).split(area);
     f.render_widget(Paragraph::new(err_msg).white().wrap(ratatui::widgets::Wrap { trim: true }), inner[0]);
-    f.render_widget(Paragraph::new("[ Stiskněte ENTER ]").alignment(Alignment::Center).dark_gray().italic(), inner[1]);
+    f.render_widget(Paragraph::new("[ Press ENTER ]").alignment(Alignment::Center).dark_gray().italic(), inner[1]);
 }
 
 fn draw_preview(f: &mut Frame, item: &FileItem, syntax_set: &SyntaxSet, theme_set: &ThemeSet, area: Rect) {
-    let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Color::Rgb(0, 120, 215))).title(" 󰈈 NÁHLED ");
+    let block = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Color::Rgb(0, 120, 215))).title(" 󰈈 PREVIEW ");
     if item.is_dir {
-        f.render_widget(Paragraph::new(vec![Line::from(""), Line::from(vec![Span::styled("  📁 SLOŽKA", Style::default().cyan().bold())]), Line::from(format!("  Název: {}", item.name)), Line::from(format!("  Velikost: {}", crate::utils::format_size(item.size)))]).block(block), area);
+        f.render_widget(Paragraph::new(vec![Line::from(""), Line::from(vec![Span::styled("  📁 FOLDER", Style::default().cyan().bold())]), Line::from(format!("  Name: {}", item.name)), Line::from(format!("  Size: {}", crate::utils::format_size(item.size)))]).block(block), area);
         return;
     }
-    if item.size > 1024 * 500 { f.render_widget(Paragraph::new("\n  Soubor je příliš velký pro náhled.").block(block).gray(), area); return; }
+    if item.size > 1024 * 500 { f.render_widget(Paragraph::new("\n  File is too large for preview.").block(block).gray(), area); return; }
     let content = match std::fs::read_to_string(&item.path) {
         Ok(c) => c.lines().take(50).collect::<Vec<&str>>().join("\n"),
-        Err(_) => { f.render_widget(Paragraph::new("\n  (Binární soubor nebo chybí práva)").block(block).dark_gray(), area); return; }
+        Err(_) => { f.render_widget(Paragraph::new("\n  (Binary file or missing permissions)").block(block).dark_gray(), area); return; }
     };
     let syntax = item.path.extension().and_then(|ext| syntax_set.find_syntax_by_extension(ext.to_str().unwrap_or(""))).or_else(|| { let lines: Vec<&str> = content.lines().collect(); if !lines.is_empty() { syntax_set.find_syntax_by_first_line(lines[0]) } else { None } }).unwrap_or_else(|| syntax_set.find_syntax_plain_text());
     let mut h = HighlightLines::new(syntax, &theme_set.themes["base16-ocean.dark"]);

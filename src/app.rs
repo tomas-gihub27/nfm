@@ -58,7 +58,7 @@ impl App {
             active_tab: 0,
             should_quit: false,
             clipboard: Clipboard::new(),
-            status_message: "Vítejte v NeoFM (H pro nápovědu)".to_string(),
+            status_message: "Welcome to NeoFM (H for help)".to_string(),
             status_time: Instant::now(),
             syntax_set: SyntaxSet::load_defaults_newlines(),
             theme_set: ThemeSet::load_defaults(),
@@ -87,7 +87,7 @@ impl App {
                 }
                 TaskUpdate::Finished(msg) => {
                     self.active_task = None;
-                    if msg.starts_with("Chyba:") {
+                    if msg.starts_with("Error:") {
                         self.error_popup = Some(msg);
                     } else {
                         self.set_status(msg);
@@ -148,23 +148,22 @@ impl App {
     fn start_background_task(&mut self, task_type: TaskType, path: PathBuf, target: PathBuf) {
         let sender = self.task_sender.clone();
         let name = match &task_type {
-            TaskType::Copy => "Kopírování".to_string(),
-            TaskType::Move => "Přesouvání".to_string(),
-            TaskType::Archive(ArchiveType::Zip) => "Zabalování (Zip)".to_string(),
-            TaskType::Archive(ArchiveType::Tar) => "Zabalování (Tar)".to_string(),
-            TaskType::Archive(ArchiveType::Gzip) => "Zabalování (Gzip)".to_string(),
-            TaskType::Unzip => "Rozbalování".to_string(),
-            TaskType::GitClone(_) => "Git Clone".to_string(),
-            TaskType::Wget(_) => "Stahování".to_string(),
-            TaskType::Encrypt { .. } => "Šifrování".to_string(),
-            TaskType::Decrypt { .. } => "Dešifrování".to_string(),
-            TaskType::Search(_) => "Hledání".to_string(),
-            TaskType::Checksum(_) => "Výpočet hashů".to_string(),
-            TaskType::Delete(_) => "Mazání".to_string(),
+            TaskType::Copy => "Copying".to_string(),
+            TaskType::Move => "Moving".to_string(),
+            TaskType::Archive(ArchiveType::Zip) => "Compressing (Zip)".to_string(),
+            TaskType::Archive(ArchiveType::Tar) => "Compressing (Tar)".to_string(),
+            TaskType::Archive(ArchiveType::Gzip) => "Compressing (Gzip)".to_string(),
+            TaskType::Unzip => "Extracting".to_string(),
+            TaskType::Wget(_) => "Downloading".to_string(),
+            TaskType::Encrypt { .. } => "Encrypting".to_string(),
+            TaskType::Decrypt { .. } => "Decrypting".to_string(),
+            TaskType::Search(_) => "Searching".to_string(),
+            TaskType::Checksum(_) => "Calculating hashes".to_string(),
+            TaskType::Delete(_) => "Deleting".to_string(),
+            _ => "Task".to_string(),
         };
-
         if let TaskType::Copy | TaskType::Move = task_type {
-             if target.starts_with(&path) && path.as_os_str().len() > 0 { self.set_status("Chyba: Cíl je uvnitř zdroje".to_string()); return; }
+             if target.starts_with(&path) && path.as_os_str().len() > 0 { self.set_status("Error: Target is inside source".to_string()); return; }
         }
 
         self.active_task = Some(BackgroundTask {
@@ -179,7 +178,7 @@ impl App {
                 TaskType::Copy => copy_with_progress(&path, &target, &sender),
                 TaskType::Move => { if fs::rename(&path, &target).is_ok() { Ok(()) } else { copy_with_progress(&path, &target, &sender).and_then(|_| { if path.is_dir() { fs::remove_dir_all(&path) } else { fs::remove_file(&path) } }) } },
                 TaskType::Archive(atype) => {
-                    let _ = sender.send(TaskUpdate::Progress(0.5, "Zabaluji...".to_string()));
+                    let _ = sender.send(TaskUpdate::Progress(0.5, "Compressing...".to_string()));
                     let parent = path.parent().unwrap_or(Path::new("."));
                     let cmd = match atype { 
                         ArchiveType::Zip => std::process::Command::new("zip").arg("-r").arg(&target).arg(path.file_name().unwrap()).current_dir(parent).stdout(Stdio::null()).stderr(Stdio::null()).status(),
@@ -189,17 +188,17 @@ impl App {
                     cmd.map(|_| ())
                 },
                 TaskType::Unzip => {
-                    let _ = sender.send(TaskUpdate::Progress(0.5, "Rozbaluji...".to_string()));
+                    let _ = sender.send(TaskUpdate::Progress(0.5, "Extracting...".to_string()));
                     if path.to_string_lossy().ends_with(".zip") { std::process::Command::new("unzip").arg(&path).arg("-d").arg(&target).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|_| ()) }
                     else { std::process::Command::new("tar").arg("-xvf").arg(&path).arg("-C").arg(&target).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|_| ()) }
                 },
-                TaskType::GitClone(url) => { let _ = sender.send(TaskUpdate::Progress(0.5, "Klonuji...".to_string())); std::process::Command::new("git").arg("clone").arg(&url).current_dir(&target).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|_| ()) },
-                TaskType::Wget(url) => { let _ = sender.send(TaskUpdate::Progress(0.5, "Stahuji...".to_string())); std::process::Command::new("wget").arg(&url).current_dir(&target).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|_| ()) },
+                TaskType::GitClone(url) => { let _ = sender.send(TaskUpdate::Progress(0.5, "Cloning...".to_string())); std::process::Command::new("git").arg("clone").arg(&url).current_dir(&target).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|_| ()) },
+                TaskType::Wget(url) => { let _ = sender.send(TaskUpdate::Progress(0.5, "Downloading...".to_string())); std::process::Command::new("wget").arg(&url).current_dir(&target).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|_| ()) },
                 TaskType::Encrypt { etype, key, output } => match etype { EncType::Xor => xor_file(&path, &output, &key), EncType::AesPlaceholder => aes_encrypt(&path, &output, &key) },
                 TaskType::Decrypt { etype, key, output } => match etype { EncType::Xor => xor_file(&path, &output, &key), EncType::AesPlaceholder => aes_decrypt(&path, &output, &key) },
-                TaskType::Search(pattern) => { let mut results = Vec::new(); search_recursive(&path, &pattern, &mut results); let _ = sender.send(TaskUpdate::Finished(if results.is_empty() { "Nenalezeno nic".to_string() } else { format!("Nalezeno {} položek", results.len()) })); return; }
+                TaskType::Search(pattern) => { let mut results = Vec::new(); search_recursive(&path, &pattern, &mut results); let _ = sender.send(TaskUpdate::Finished(if results.is_empty() { "Nothing found".to_string() } else { format!("Found {} items", results.len()) })); return; }
                 TaskType::Checksum(algo) => {
-                    let _ = sender.send(TaskUpdate::Progress(0.5, format!("Počítám {}...", algo)));
+                    let _ = sender.send(TaskUpdate::Progress(0.5, format!("Calculating {}...", algo)));
                     match fs::read(&path) {
                         Ok(data) => {
                             let hash = if algo == "MD5" { format!("{:x}", md5::Md5::digest(&data)) } else { format!("{:x}", sha2::Sha256::digest(&data)) };
@@ -211,7 +210,7 @@ impl App {
                 TaskType::Delete(paths) => { let total = paths.len(); for (i, p) in paths.iter().enumerate() { let _ = sender.send(TaskUpdate::Progress(i as f64 / total as f64, p.to_string_lossy().to_string())); if p.is_dir() { let _ = fs::remove_dir_all(p); } else { let _ = fs::remove_file(p); } } Ok(()) }
             };
 
-            match res { Ok(_) => { let _ = sender.send(TaskUpdate::Finished(format!("{} dokončeno", name))); } Err(e) => { let _ = sender.send(TaskUpdate::Finished(format!("Chyba: {}", e))); } }
+            match res { Ok(_) => { let _ = sender.send(TaskUpdate::Finished(format!("{} finished", name))); } Err(e) => { let _ = sender.send(TaskUpdate::Finished(format!("Error: {}", e))); } }
         });
     }
 

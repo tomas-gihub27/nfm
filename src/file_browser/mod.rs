@@ -124,29 +124,29 @@ pub mod file_browser {
                 mode: BrowserMode::Normal,
                 should_quit: false,
                 menu_items: vec![
-                    "--- SOUBORY ---".to_string(), 
-                    "Kopírovat cestu".to_string(), 
-                    "Vytvořit Symlink".to_string(), 
-                    "Změnit práva".to_string(), 
-                    "Vlastnosti".to_string(), 
-                    "Kontrolní součet".to_string(), 
-                    "--- NÁSTROJE ---".to_string(), 
-                    "Zabalit (Archive)".to_string(), 
-                    "Rozbalit (Extract)".to_string(), 
-                    "Hromadné přejmenování".to_string(), 
+                    "--- FILES ---".to_string(), 
+                    "Copy Path".to_string(), 
+                    "Create Symlink".to_string(), 
+                    "Change Permissions".to_string(), 
+                    "Properties".to_string(), 
+                    "Checksum".to_string(), 
+                    "--- TOOLS ---".to_string(), 
+                    "Compress (Archive)".to_string(), 
+                    "Extract (Extract)".to_string(), 
+                    "Bulk Rename".to_string(), 
                     "Git Clone".to_string(), 
-                    "Wget (Stáhnout)".to_string(), 
-                    "Zašifrovat".to_string(), 
-                    "Rozšifrovat".to_string(), 
-                    "--- ZOBRAZENÍ ---".to_string(), 
-                    "Skryté soubory: Vyp/Zap".to_string(), 
-                    "Filtrovat seznam".to_string(), 
-                    "Hledat soubory".to_string(), 
-                    "Obnovit panel".to_string(), 
-                    "Terminál zde".to_string(), 
-                    "Nastavení (Config)".to_string(), 
-                    "Náhled: Vyp/Zap".to_string(), 
-                    "Seřadit podle...".to_string(), 
+                    "Wget (Download)".to_string(), 
+                    "Encrypt".to_string(), 
+                    "Decrypt".to_string(), 
+                    "--- VIEW ---".to_string(), 
+                    "Hidden Files: Off/On".to_string(), 
+                    "Filter List".to_string(), 
+                    "Search Files".to_string(), 
+                    "Refresh Panel".to_string(), 
+                    "Terminal here".to_string(), 
+                    "Settings (Config)".to_string(), 
+                    "Preview: Off/On".to_string(), 
+                    "Sort by...".to_string(), 
                 ],
                 drives: Vec::new(),
                 show_hidden: false,
@@ -227,12 +227,12 @@ pub mod file_browser {
                 KeyCode::Enter => { if let Some(item) = self.items.get(self.selected_index) { if item.is_dir { self.current_dir = item.path.clone(); self.refresh(); self.selected_index = 0; } else { return Some(TabRequest::OpenEditor(item.path.clone())); } } }
                 KeyCode::Char(' ') => { if let Some(item) = self.items.get_mut(self.selected_index) { item.selected = !item.selected; } if self.selected_index + 1 < self.items.len() { self.selected_index += 1; } }
                 KeyCode::Char('o') | KeyCode::Char('O') => { self.mode = BrowserMode::Menu(1); }
-                KeyCode::Char('n') | KeyCode::Char('N') => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Název nového souboru:".to_string(), input: String::new(), action: DialogAction::NewFile }); }
-                KeyCode::Char('m') | KeyCode::Char('M') => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Název nové složky:".to_string(), input: String::new(), action: DialogAction::NewFolder }); }
-                KeyCode::Char('r') | KeyCode::Char('R') => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Přejmenovat na:".to_string(), input: item.name.clone(), action: DialogAction::Rename(item.path.clone()) }); } }
+                KeyCode::Char('n') | KeyCode::Char('N') => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "New file name:".to_string(), input: String::new(), action: DialogAction::NewFile }); }
+                KeyCode::Char('m') | KeyCode::Char('M') => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "New folder name:".to_string(), input: String::new(), action: DialogAction::NewFolder }); }
+                KeyCode::Char('r') | KeyCode::Char('R') => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Rename to:".to_string(), input: item.name.clone(), action: DialogAction::Rename(item.path.clone()) }); } }
                 KeyCode::Delete | KeyCode::Char('D') => { if config.file_browser.confirm_delete { self.mode = BrowserMode::Dialog(DialogType::DeleteConfirm); } else { return self.start_delete(); } }
-                KeyCode::Char('c') | KeyCode::Char('C') if key.modifiers.contains(KeyModifiers::CONTROL) => { if let Some(item) = self.items.get(self.selected_index) { clipboard.set_file(item.path.clone(), false); return Some(TabRequest::SetStatus("Zkopírováno".to_string())); } }
-                KeyCode::Char('x') | KeyCode::Char('X') if key.modifiers.contains(KeyModifiers::CONTROL) => { if let Some(item) = self.items.get(self.selected_index) { clipboard.set_file(item.path.clone(), true); return Some(TabRequest::SetStatus("Vyjmuto".to_string())); } }
+                KeyCode::Char('c') | KeyCode::Char('C') if key.modifiers.contains(KeyModifiers::CONTROL) => { if let Some(item) = self.items.get(self.selected_index) { clipboard.set_file(item.path.clone(), false); return Some(TabRequest::SetStatus("Copied".to_string())); } }
+                KeyCode::Char('x') | KeyCode::Char('X') if key.modifiers.contains(KeyModifiers::CONTROL) => { if let Some(item) = self.items.get(self.selected_index) { clipboard.set_file(item.path.clone(), true); return Some(TabRequest::SetStatus("Cut".to_string())); } }
                 KeyCode::Char('v') | KeyCode::Char('V') if key.modifiers.contains(KeyModifiers::CONTROL) => { if let Some((path, is_cut)) = clipboard.get_file() { if let Some(name) = path.file_name() { return Some(TabRequest::StartTask { task_type: if is_cut { TaskType::Move } else { TaskType::Copy }, path: path.clone(), target: self.current_dir.join(name) }); } } }
                 _ => {}
             }
@@ -270,25 +270,25 @@ pub mod file_browser {
                     KeyCode::Left => { if *idx > 14 { *idx = 7; } else if *idx > 6 { *idx = 1; } },
                     KeyCode::Enter => {
                         match *idx {
-                            1 => { if let Some(item) = self.items.get(self.selected_index) { clipboard.set_text(item.path.to_string_lossy().to_string()); req = Some(TabRequest::SetStatus("Cesta zkopírována".to_string())); } }
-                            2 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Název symlinku:".to_string(), input: format!("{}_link", item.name), action: DialogAction::Symlink(item.path.clone()) }); return None; } }
+                            1 => { if let Some(item) = self.items.get(self.selected_index) { clipboard.set_text(item.path.to_string_lossy().to_string()); req = Some(TabRequest::SetStatus("Path copied".to_string())); } }
+                            2 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Symlink name:".to_string(), input: format!("{}_link", item.name), action: DialogAction::Symlink(item.path.clone()) }); return None; } }
                             3 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = self.init_permissions(item.clone()); return None; } }
                             4 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Metadata(item.clone()); return None; } }
-                            5 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Algoritmus".to_string(), options: vec!["MD5".to_string(), "SHA256".to_string()], selected: 0, action: SelectionAction::Checksum(item.path.clone()) }; return None; } }
-                            7 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Typ archivu".to_string(), options: vec!["ZIP".to_string(), "TAR".to_string(), "GZIP".to_string()], selected: 0, action: SelectionAction::Archive(item.path.clone()) }; return None; } }
+                            5 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Algorithm".to_string(), options: vec!["MD5".to_string(), "SHA256".to_string()], selected: 0, action: SelectionAction::Checksum(item.path.clone()) }; return None; } }
+                            7 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Archive type".to_string(), options: vec!["ZIP".to_string(), "TAR".to_string(), "GZIP".to_string()], selected: 0, action: SelectionAction::Archive(item.path.clone()) }; return None; } }
                             8 => { if let Some(item) = self.items.get(self.selected_index) { if item.name.ends_with(".zip") || item.name.ends_with(".tar") || item.name.ends_with(".gz") { req = Some(TabRequest::StartTask { task_type: TaskType::Unzip, path: item.path.clone(), target: self.current_dir.clone() }); } } }
                             10 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Git Clone URL:".to_string(), input: String::new(), action: DialogAction::GitClone }); return None; }
                             11 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Wget URL:".to_string(), input: String::new(), action: DialogAction::Wget }); return None; }
-                            12 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Typ šifrování".to_string(), options: vec!["XOR (Rychlé)".to_string(), "AES (Placeholder)".to_string()], selected: 0, action: SelectionAction::Encrypt(item.path.clone()) }; return None; } }
-                            13 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Typ šifrování".to_string(), options: vec!["XOR".to_string(), "AES".to_string()], selected: 0, action: SelectionAction::Decrypt(item.path.clone()) }; return None; } }
-                            15 => { self.show_hidden = !self.show_hidden; self.refresh(); req = Some(TabRequest::SetStatus(format!("Skryté: {}", if self.show_hidden { "Ano" } else { "Ne" }))); }
-                            16 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Filtr:".to_string(), input: self.filter.clone(), action: DialogAction::Filter }); return None; }
-                            17 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Hledat výraz:".to_string(), input: String::new(), action: DialogAction::Search }); return None; }
-                            18 => { self.refresh(); req = Some(TabRequest::SetStatus("Obnoveno".to_string())); }
-                            19 => { if cfg!(target_os = "windows") { let _ = std::process::Command::new("cmd").current_dir(&self.current_dir).spawn(); } else { let _ = std::process::Command::new("sh").arg("-c").arg("$TERM").current_dir(&self.current_dir).spawn(); } req = Some(TabRequest::SetStatus("Terminál otevřen".to_string())); }
+                            12 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Encryption type".to_string(), options: vec!["XOR (Fast)".to_string(), "AES (Placeholder)".to_string()], selected: 0, action: SelectionAction::Encrypt(item.path.clone()) }; return None; } }
+                            13 => { if let Some(item) = self.items.get(self.selected_index) { self.mode = BrowserMode::Selection { title: "Encryption type".to_string(), options: vec!["XOR".to_string(), "AES".to_string()], selected: 0, action: SelectionAction::Decrypt(item.path.clone()) }; return None; } }
+                            15 => { self.show_hidden = !self.show_hidden; self.refresh(); req = Some(TabRequest::SetStatus(format!("Hidden: {}", if self.show_hidden { "Yes" } else { "No" }))); }
+                            16 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Filter:".to_string(), input: self.filter.clone(), action: DialogAction::Filter }); return None; }
+                            17 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Search pattern:".to_string(), input: String::new(), action: DialogAction::Search }); return None; }
+                            18 => { self.refresh(); req = Some(TabRequest::SetStatus("Refreshed".to_string())); }
+                            19 => { if cfg!(target_os = "windows") { let _ = std::process::Command::new("cmd").current_dir(&self.current_dir).spawn(); } else { let _ = std::process::Command::new("sh").arg("-c").arg("$TERM").current_dir(&self.current_dir).spawn(); } req = Some(TabRequest::SetStatus("Terminal opened".to_string())); }
                             20 => { let cp = crate::config::get_config_path(); return Some(TabRequest::OpenEditor(cp)); }
-                            21 => { self.show_preview = !self.show_preview; req = Some(TabRequest::SetStatus(format!("Náhled: {}", if self.show_preview { "Zap" } else { "Vyp" }))); }
-                            22 => { self.mode = BrowserMode::Selection { title: "Seřadit podle".to_string(), options: vec!["Název (A-Z)".to_string(), "Název (Z-A)".to_string(), "Velikost (Nejmenší)".to_string(), "Velikost (Největší)".to_string(), "Datum (Nejstarší)".to_string(), "Datum (Nejnovější)".to_string()], selected: 0, action: SelectionAction::SortMode }; return None; }
+                            21 => { self.show_preview = !self.show_preview; req = Some(TabRequest::SetStatus(format!("Preview: {}", if self.show_preview { "On" } else { "Off" }))); }
+                            22 => { self.mode = BrowserMode::Selection { title: "Sort by".to_string(), options: vec!["Name (A-Z)".to_string(), "Name (Z-A)".to_string(), "Size (Smallest)".to_string(), "Size (Largest)".to_string(), "Date (Oldest)".to_string(), "Date (Newest)".to_string()], selected: 0, action: SelectionAction::SortMode }; return None; }
                             _ => {}
                         }
                         close_menu = true;
@@ -330,7 +330,7 @@ pub mod file_browser {
                             use std::os::unix::fs::PermissionsExt;
                             let _ = fs::set_permissions(&item.path, fs::Permissions::from_mode(mode));
                         }
-                        self.mode = BrowserMode::Normal; return Some(TabRequest::SetStatus("Práva uložena".to_string()));
+                        self.mode = BrowserMode::Normal; return Some(TabRequest::SetStatus("Permissions saved".to_string()));
                     }
                     _ => {}
                 }
@@ -351,15 +351,15 @@ pub mod file_browser {
                                 let atype = match *selected { 0 => ArchiveType::Zip, 1 => ArchiveType::Tar, _ => ArchiveType::Gzip };
                                 let ext = match atype { ArchiveType::Zip => "zip", ArchiveType::Tar => "tar", ArchiveType::Gzip => "tar.gz" };
                                 let out = path.file_name().unwrap().to_string_lossy().to_string();
-                                next_mode = Some(BrowserMode::Form { title: "ZABALIT ARCHIV".to_string(), fields: vec![FormField { label: "Výstupní název:".to_string(), value: format!("{}.{}", out, ext), is_password: false }], active_idx: 0, action: FormAction::Archive { path: path.clone(), atype } });
+                                next_mode = Some(BrowserMode::Form { title: "ARCHIVE FILE".to_string(), fields: vec![FormField { label: "Output name:".to_string(), value: format!("{}.{}", out, ext), is_password: false }], active_idx: 0, action: FormAction::Archive { path: path.clone(), atype } });
                             }
                             SelectionAction::Encrypt(path) => {
                                 let etype = if *selected == 0 { EncType::Xor } else { EncType::AesPlaceholder };
-                                next_mode = Some(BrowserMode::Form { title: "ZAŠIFROVAT SOUBOR".to_string(), fields: vec![FormField { label: "Heslo/Klíč:".to_string(), value: String::new(), is_password: true }, FormField { label: "Výstupní název:".to_string(), value: format!("{}.enc", path.file_name().unwrap().to_string_lossy()), is_password: false }], active_idx: 0, action: FormAction::Encrypt { path: path.clone(), etype } });
+                                next_mode = Some(BrowserMode::Form { title: "ENCRYPT FILE".to_string(), fields: vec![FormField { label: "Password/Key:".to_string(), value: String::new(), is_password: true }, FormField { label: "Output name:".to_string(), value: format!("{}.enc", path.file_name().unwrap().to_string_lossy()), is_password: false }], active_idx: 0, action: FormAction::Encrypt { path: path.clone(), etype } });
                             }
                             SelectionAction::Decrypt(path) => {
                                 let etype = if *selected == 0 { EncType::Xor } else { EncType::AesPlaceholder };
-                                next_mode = Some(BrowserMode::Form { title: "ROZŠIFROVAT SOUBOR".to_string(), fields: vec![FormField { label: "Heslo/Klíč:".to_string(), value: String::new(), is_password: true }, FormField { label: "Výstupní název:".to_string(), value: path.file_name().unwrap().to_string_lossy().to_string().replace(".enc", ""), is_password: false }], active_idx: 0, action: FormAction::Decrypt { path: path.clone(), etype } });
+                                next_mode = Some(BrowserMode::Form { title: "DECRYPT FILE".to_string(), fields: vec![FormField { label: "Password/Key:".to_string(), value: String::new(), is_password: true }, FormField { label: "Output name:".to_string(), value: path.file_name().unwrap().to_string_lossy().to_string().replace(".enc", ""), is_password: false }], active_idx: 0, action: FormAction::Decrypt { path: path.clone(), etype } });
                             }
                             SelectionAction::Checksum(path) => { req = Some(TabRequest::StartTask { task_type: TaskType::Checksum(options[*selected].clone()), path: path.clone(), target: PathBuf::new() }); next_mode = Some(BrowserMode::Normal); }
                             SelectionAction::SortMode => { self.sort_mode = match *selected { 0 => SortMode::NameAsc, 1 => SortMode::NameDesc, 2 => SortMode::SizeAsc, 3 => SortMode::SizeDesc, 4 => SortMode::DateAsc, _ => SortMode::DateDesc }; self.refresh(); next_mode = Some(BrowserMode::Normal); }
