@@ -22,10 +22,15 @@ pub mod editor {
             let mut content = vec![String::new()];
             if let Some(p) = &path {
                 if p.exists() {
-                    if let Ok(text) = fs::read_to_string(p) {
-                        content = text.lines().map(|s| s.to_string()).collect();
-                        if content.is_empty() {
-                            content.push(String::new());
+                    match fs::read_to_string(p) {
+                        Ok(text) => {
+                            content = text.lines().map(|s| s.to_string()).collect();
+                            if content.is_empty() {
+                                content.push(String::new());
+                            }
+                        }
+                        Err(e) => {
+                            content = vec![format!("(Chyba čtení: Tento soubor možná není textový nebo k němu nemáte práva. Detail: {})", e)];
                         }
                     }
                 }

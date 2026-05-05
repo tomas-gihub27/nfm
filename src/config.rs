@@ -83,7 +83,7 @@ impl Config {
     }
 }
 
-fn get_config_path() -> PathBuf {
+pub fn get_config_path() -> PathBuf {
     if let Some(proj_dirs) = directories::ProjectDirs::from("com", "NeoFM", "nfm") {
         proj_dirs.config_dir().join("config.toml")
     } else {

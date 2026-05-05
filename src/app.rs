@@ -4,11 +4,21 @@ use std::time::{Duration, Instant};
 use syntect::parsing::SyntaxSet;
 use syntect::highlighting::ThemeSet;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::fs;
+use std::process::Stdio;
+
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce
+};
+use sha2::{Sha256, Digest};
+use md5;
+use rand::RngCore;
 
 pub use crate::tabs::{Tab, TabState};
 use crate::config::Config;
 use crate::utils::Clipboard;
-use crate::file_browser::file_browser::TaskType;
+use crate::file_browser::file_browser::{TaskType, ArchiveType, EncType};
 
 pub enum TaskUpdate {
     Progress(f64, String),
@@ -18,7 +28,7 @@ pub enum TaskUpdate {
 pub struct BackgroundTask {
     pub name: String,
     pub current_item: String,
-    pub progress: f64, // 0.0 to 1.0
+    pub progress: f64, 
     pub start_time: Instant,
 }
 
@@ -33,8 +43,10 @@ pub struct App {
     pub syntax_set: SyntaxSet,
     pub theme_set: ThemeSet,
     pub active_task: Option<BackgroundTask>,
+    pub error_popup: Option<String>,
     pub task_receiver: Receiver<TaskUpdate>,
     pub task_sender: Sender<TaskUpdate>,
+    pub anim_frame: usize,
 }
 
 impl App {
@@ -46,13 +58,15 @@ impl App {
             active_tab: 0,
             should_quit: false,
             clipboard: Clipboard::new(),
-            status_message: "Vítejte v NeoFM".to_string(),
+            status_message: "Vítejte v NeoFM (H pro nápovědu)".to_string(),
             status_time: Instant::now(),
             syntax_set: SyntaxSet::load_defaults_newlines(),
             theme_set: ThemeSet::load_defaults(),
             active_task: None,
+            error_popup: None,
             task_receiver: rx,
             task_sender: tx,
+            anim_frame: 0,
         }
     }
 
@@ -62,6 +76,7 @@ impl App {
     }
 
     pub fn run_tick(&mut self) {
+        self.anim_frame = self.anim_frame.wrapping_add(1);
         while let Ok(update) = self.task_receiver.try_recv() {
             match update {
                 TaskUpdate::Progress(p, msg) => {
@@ -72,7 +87,11 @@ impl App {
                 }
                 TaskUpdate::Finished(msg) => {
                     self.active_task = None;
-                    self.set_status(msg);
+                    if msg.starts_with("Chyba:") {
+                        self.error_popup = Some(msg);
+                    } else {
+                        self.set_status(msg);
+                    }
                     if let TabState::FileBrowser(fb) = &mut self.tabs[self.active_tab].state {
                         fb.refresh();
                     }
@@ -89,60 +108,35 @@ impl App {
         if event::poll(Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
+                    if self.error_popup.is_some() {
+                        match key.code {
+                            KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char(' ') => { self.error_popup = None; }
+                            _ => {}
+                        }
+                        return Ok(());
+                    }
+
                     match key.code {
-                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                            // Already handled in file_browser if focus is there, but this is a fallback or global shortcut
-                        }
-                        KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                            self.close_tab();
-                            return Ok(());
-                        }
+                        KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => { self.close_tab(); return Ok(()); }
                         KeyCode::Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                            let path = if let TabState::FileBrowser(fb) = &self.tabs[self.active_tab].state {
-                                fb.current_dir.clone()
-                            } else {
-                                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))
-                            };
-                            self.tabs.push(Tab::new_browser(path));
-                            self.active_tab = self.tabs.len() - 1;
-                            return Ok(());
+                            let path = if let TabState::FileBrowser(fb) = &self.tabs[self.active_tab].state { fb.current_dir.clone() } else { std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")) };
+                            self.tabs.push(Tab::new_browser(path)); self.active_tab = self.tabs.len() - 1; return Ok(());
                         }
-                        KeyCode::Tab => {
-                            self.next_tab();
-                            return Ok(());
-                        }
+                        KeyCode::Tab => { self.next_tab(); return Ok(()); }
                         _ => {}
                     }
 
                     let mut new_tab_req = None;
                     match &mut self.tabs[self.active_tab].state {
-                        TabState::FileBrowser(state) => {
-                            if let Some(req) = state.handle_key(key, &mut self.clipboard, &self.config) {
-                                new_tab_req = Some(req);
-                            } else if state.should_quit {
-                                self.should_quit = true;
-                            }
-                        }
-                        TabState::Editor(state) => {
-                            state.handle_key(key, &mut self.clipboard, &self.config);
-                            if state.should_quit {
-                                self.close_tab();
-                            }
-                        }
+                        TabState::FileBrowser(state) => { if let Some(req) = state.handle_key(key, &mut self.clipboard, &self.config) { new_tab_req = Some(req); } else if state.should_quit { self.should_quit = true; } }
+                        TabState::Editor(state) => { state.handle_key(key, &mut self.clipboard, &self.config); if state.should_quit { self.close_tab(); } }
                     }
 
                     if let Some(req) = new_tab_req {
                         match req {
-                            crate::file_browser::file_browser::TabRequest::OpenEditor(path) => {
-                                self.tabs.push(Tab::new_editor(Some(path)));
-                                self.active_tab = self.tabs.len() - 1;
-                            }
-                            crate::file_browser::file_browser::TabRequest::SetStatus(msg) => {
-                                self.set_status(msg);
-                            }
-                            crate::file_browser::file_browser::TabRequest::StartTask { task_type, path, target } => {
-                                self.start_background_task(task_type, path, target);
-                            }
+                            crate::file_browser::file_browser::TabRequest::OpenEditor(path) => { self.tabs.push(Tab::new_editor(Some(path))); self.active_tab = self.tabs.len() - 1; }
+                            crate::file_browser::file_browser::TabRequest::SetStatus(msg) => { self.set_status(msg); }
+                            crate::file_browser::file_browser::TabRequest::StartTask { task_type, path, target } => { self.start_background_task(task_type, path, target); }
                         }
                     }
                 }
@@ -156,22 +150,26 @@ impl App {
         let name = match &task_type {
             TaskType::Copy => "Kopírování".to_string(),
             TaskType::Move => "Přesouvání".to_string(),
-            TaskType::Zip => "Zabalování".to_string(),
+            TaskType::Archive(ArchiveType::Zip) => "Zabalování (Zip)".to_string(),
+            TaskType::Archive(ArchiveType::Tar) => "Zabalování (Tar)".to_string(),
+            TaskType::Archive(ArchiveType::Gzip) => "Zabalování (Gzip)".to_string(),
             TaskType::Unzip => "Rozbalování".to_string(),
             TaskType::GitClone(_) => "Git Clone".to_string(),
             TaskType::Wget(_) => "Stahování".to_string(),
+            TaskType::Encrypt { .. } => "Šifrování".to_string(),
+            TaskType::Decrypt { .. } => "Dešifrování".to_string(),
+            TaskType::Search(_) => "Hledání".to_string(),
+            TaskType::Checksum(_) => "Výpočet hashů".to_string(),
+            TaskType::Delete(_) => "Mazání".to_string(),
         };
 
         if let TaskType::Copy | TaskType::Move = task_type {
-             if target.starts_with(&path) && path.as_os_str().len() > 0 {
-                 self.set_status("Chyba: Cíl je uvnitř zdroje".to_string());
-                 return;
-             }
+             if target.starts_with(&path) && path.as_os_str().len() > 0 { self.set_status("Chyba: Cíl je uvnitř zdroje".to_string()); return; }
         }
 
         self.active_task = Some(BackgroundTask {
             name: name.clone(),
-            current_item: if path.as_os_str().is_empty() { "Vzdálený zdroj".to_string() } else { path.to_string_lossy().to_string() },
+            current_item: if path.as_os_str().is_empty() { "...".to_string() } else { path.to_string_lossy().to_string() },
             progress: 0.0,
             start_time: Instant::now(),
         });
@@ -179,126 +177,89 @@ impl App {
         std::thread::spawn(move || {
             let res = match task_type {
                 TaskType::Copy => copy_with_progress(&path, &target, &sender),
-                TaskType::Move => {
-                    if std::fs::rename(&path, &target).is_ok() {
-                        Ok(())
-                    } else {
-                        copy_with_progress(&path, &target, &sender).and_then(|_| {
-                            if path.is_dir() {
-                                std::fs::remove_dir_all(&path)
-                            } else {
-                                std::fs::remove_file(&path)
-                            }
-                        })
-                    }
-                },
-                TaskType::Zip => {
-                    let _ = sender.send(TaskUpdate::Progress(0.5, "Spouštím zip...".to_string()));
+                TaskType::Move => { if fs::rename(&path, &target).is_ok() { Ok(()) } else { copy_with_progress(&path, &target, &sender).and_then(|_| { if path.is_dir() { fs::remove_dir_all(&path) } else { fs::remove_file(&path) } }) } },
+                TaskType::Archive(atype) => {
+                    let _ = sender.send(TaskUpdate::Progress(0.5, "Zabaluji...".to_string()));
                     let parent = path.parent().unwrap_or(Path::new("."));
-                    std::process::Command::new("zip")
-                        .arg("-r")
-                        .arg(&target)
-                        .arg(path.file_name().unwrap())
-                        .current_dir(parent)
-                        .status()
-                        .map(|_| ())
+                    let cmd = match atype { 
+                        ArchiveType::Zip => std::process::Command::new("zip").arg("-r").arg(&target).arg(path.file_name().unwrap()).current_dir(parent).stdout(Stdio::null()).stderr(Stdio::null()).status(),
+                        ArchiveType::Tar => std::process::Command::new("tar").arg("-cvf").arg(&target).arg(path.file_name().unwrap()).current_dir(parent).stdout(Stdio::null()).stderr(Stdio::null()).status(),
+                        ArchiveType::Gzip => std::process::Command::new("tar").arg("-czvf").arg(&target).arg(path.file_name().unwrap()).current_dir(parent).stdout(Stdio::null()).stderr(Stdio::null()).status(),
+                    };
+                    cmd.map(|_| ())
                 },
                 TaskType::Unzip => {
-                    let _ = sender.send(TaskUpdate::Progress(0.5, "Spouštím unzip...".to_string()));
-                    std::process::Command::new("unzip")
-                        .arg(&path)
-                        .arg("-d")
-                        .arg(&target)
-                        .status()
-                        .map(|_| ())
+                    let _ = sender.send(TaskUpdate::Progress(0.5, "Rozbaluji...".to_string()));
+                    if path.to_string_lossy().ends_with(".zip") { std::process::Command::new("unzip").arg(&path).arg("-d").arg(&target).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|_| ()) }
+                    else { std::process::Command::new("tar").arg("-xvf").arg(&path).arg("-C").arg(&target).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|_| ()) }
                 },
-                TaskType::GitClone(url) => {
-                    let _ = sender.send(TaskUpdate::Progress(0.5, format!("Klonuji {}...", url)));
-                    std::process::Command::new("git")
-                        .arg("clone")
-                        .arg(&url)
-                        .current_dir(&target)
-                        .status()
-                        .map(|_| ())
-                },
-                TaskType::Wget(url) => {
-                    let _ = sender.send(TaskUpdate::Progress(0.5, format!("Stahuji {}...", url)));
-                    std::process::Command::new("wget")
-                        .arg(&url)
-                        .current_dir(&target)
-                        .status()
-                        .map(|_| ())
+                TaskType::GitClone(url) => { let _ = sender.send(TaskUpdate::Progress(0.5, "Klonuji...".to_string())); std::process::Command::new("git").arg("clone").arg(&url).current_dir(&target).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|_| ()) },
+                TaskType::Wget(url) => { let _ = sender.send(TaskUpdate::Progress(0.5, "Stahuji...".to_string())); std::process::Command::new("wget").arg(&url).current_dir(&target).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|_| ()) },
+                TaskType::Encrypt { etype, key, output } => match etype { EncType::Xor => xor_file(&path, &output, &key), EncType::AesPlaceholder => aes_encrypt(&path, &output, &key) },
+                TaskType::Decrypt { etype, key, output } => match etype { EncType::Xor => xor_file(&path, &output, &key), EncType::AesPlaceholder => aes_decrypt(&path, &output, &key) },
+                TaskType::Search(pattern) => { let mut results = Vec::new(); search_recursive(&path, &pattern, &mut results); let _ = sender.send(TaskUpdate::Finished(if results.is_empty() { "Nenalezeno nic".to_string() } else { format!("Nalezeno {} položek", results.len()) })); return; }
+                TaskType::Checksum(algo) => {
+                    let _ = sender.send(TaskUpdate::Progress(0.5, format!("Počítám {}...", algo)));
+                    match fs::read(&path) {
+                        Ok(data) => {
+                            let hash = if algo == "MD5" { format!("{:x}", md5::Md5::digest(&data)) } else { format!("{:x}", sha2::Sha256::digest(&data)) };
+                            let _ = sender.send(TaskUpdate::Finished(format!("{} hash: {}", algo, hash))); return;
+                        }
+                        Err(e) => Err(e)
+                    }
                 }
+                TaskType::Delete(paths) => { let total = paths.len(); for (i, p) in paths.iter().enumerate() { let _ = sender.send(TaskUpdate::Progress(i as f64 / total as f64, p.to_string_lossy().to_string())); if p.is_dir() { let _ = fs::remove_dir_all(p); } else { let _ = fs::remove_file(p); } } Ok(()) }
             };
 
-            match res {
-                Ok(_) => {
-                    let _ = sender.send(TaskUpdate::Finished(format!("{} dokončeno", name)));
-                }
-                Err(e) => {
-                    let _ = sender.send(TaskUpdate::Finished(format!("Chyba: {}", e)));
-                }
-            }
+            match res { Ok(_) => { let _ = sender.send(TaskUpdate::Finished(format!("{} dokončeno", name))); } Err(e) => { let _ = sender.send(TaskUpdate::Finished(format!("Chyba: {}", e))); } }
         });
     }
 
-    fn next_tab(&mut self) {
-        if !self.tabs.is_empty() {
-            self.active_tab = (self.active_tab + 1) % self.tabs.len();
-        }
-    }
-
-    fn close_tab(&mut self) {
-        if self.tabs.len() > 1 {
-            self.tabs.remove(self.active_tab);
-            if self.active_tab >= self.tabs.len() {
-                self.active_tab = self.tabs.len() - 1;
-            }
-        } else {
-            self.should_quit = true;
-        }
-    }
+    fn next_tab(&mut self) { if !self.tabs.is_empty() { self.active_tab = (self.active_tab + 1) % self.tabs.len(); } }
+    fn close_tab(&mut self) { if self.tabs.len() > 1 { self.tabs.remove(self.active_tab); if self.active_tab >= self.tabs.len() { self.active_tab = self.tabs.len() - 1; } } else { self.should_quit = true; } }
 }
 
 fn copy_with_progress(src: &PathBuf, dst: &PathBuf, sender: &Sender<TaskUpdate>) -> std::io::Result<()> {
-    if src.is_dir() {
-        let mut total_files = 0;
-        count_files(src, &mut total_files);
-        let mut copied_files = 0;
-        copy_dir_with_progress(src, dst, sender, total_files, &mut copied_files)
-    } else {
-        std::fs::copy(src, dst)?;
-        let _ = sender.send(TaskUpdate::Progress(1.0, src.to_string_lossy().to_string()));
-        Ok(())
-    }
+    if src.is_dir() { let mut total = 0; count_files(src, &mut total); let mut current = 0; copy_dir_with_progress(src, dst, sender, total, &mut current) }
+    else { fs::copy(src, dst)?; let _ = sender.send(TaskUpdate::Progress(1.0, src.to_string_lossy().to_string())); Ok(()) }
 }
 
-fn count_files(path: &PathBuf, count: &mut usize) {
-    if let Ok(entries) = std::fs::read_dir(path) {
-        for entry in entries.flatten() {
-            *count += 1;
-            if entry.path().is_dir() {
-                count_files(&entry.path(), count);
-            }
-        }
-    }
-}
+fn count_files(path: &PathBuf, count: &mut usize) { if let Ok(entries) = fs::read_dir(path) { for entry in entries.flatten() { *count += 1; if entry.path().is_dir() { count_files(&entry.path(), count); } } } }
 
-fn copy_dir_with_progress(src: &PathBuf, dst: &PathBuf, sender: &Sender<TaskUpdate>, total: usize, copied: &mut usize) -> std::io::Result<()> {
-    std::fs::create_dir_all(dst)?;
-    if let Ok(entries) = std::fs::read_dir(src) {
+fn copy_dir_with_progress(src: &PathBuf, dst: &PathBuf, sender: &Sender<TaskUpdate>, total: usize, current: &mut usize) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    if let Ok(entries) = fs::read_dir(src) {
         for entry in entries.flatten() {
-            let path = entry.path();
-            let target = dst.join(entry.file_name());
-            if path.is_dir() {
-                copy_dir_with_progress(&path, &target, sender, total, copied)?;
-            } else {
-                std::fs::copy(&path, &target)?;
-            }
-            *copied += 1;
-            let progress = if total > 0 { *copied as f64 / total as f64 } else { 1.0 };
-            let _ = sender.send(TaskUpdate::Progress(progress, path.to_string_lossy().to_string()));
+            let p = entry.path(); let t = dst.join(entry.file_name());
+            if p.is_dir() { copy_dir_with_progress(&p, &t, sender, total, current)?; } else { fs::copy(&p, &t)?; }
+            *current += 1; let _ = sender.send(TaskUpdate::Progress(if total > 0 { *current as f64 / total as f64 } else { 1.0 }, p.to_string_lossy().to_string()));
         }
     }
     Ok(())
 }
+
+fn xor_file(src: &PathBuf, dst: &PathBuf, key: &str) -> std::io::Result<()> {
+    let data = fs::read(src)?; let kb = key.as_bytes();
+    let xored: Vec<u8> = data.iter().enumerate().map(|(i, b)| b ^ kb[i % kb.len()]).collect();
+    fs::write(dst, xored)
+}
+
+fn aes_encrypt(src: &PathBuf, dst: &PathBuf, key: &str) -> std::io::Result<()> {
+    let data = fs::read(src)?;
+    let mut hasher = Sha256::new(); hasher.update(key.as_bytes()); let hashed_key = hasher.finalize();
+    let cipher = Aes256Gcm::new(&hashed_key);
+    let mut nonce_bytes = [0u8; 12]; rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    let ciphertext = cipher.encrypt(Nonce::from_slice(&nonce_bytes), data.as_slice()).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("AES encrypt error: {}", e)))?;
+    let mut output = Vec::with_capacity(12 + ciphertext.len()); output.extend_from_slice(&nonce_bytes); output.extend_from_slice(&ciphertext);
+    fs::write(dst, output)
+}
+
+fn aes_decrypt(src: &PathBuf, dst: &PathBuf, key: &str) -> std::io::Result<()> {
+    let data = fs::read(src)?; if data.len() < 12 { return Err(std::io::Error::new(std::io::ErrorKind::Other, "Invalid encrypted file")); }
+    let mut hasher = Sha256::new(); hasher.update(key.as_bytes()); let hashed_key = hasher.finalize();
+    let cipher = Aes256Gcm::new(&hashed_key);
+    let plaintext = cipher.decrypt(Nonce::from_slice(&data[..12]), &data[12..]).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("AES decrypt error (wrong key?): {}", e)))?;
+    fs::write(dst, plaintext)
+}
+
+fn search_recursive(path: &PathBuf, pattern: &str, results: &mut Vec<PathBuf>) { if let Ok(entries) = fs::read_dir(path) { for entry in entries.flatten() { let p = entry.path(); if p.file_name().unwrap_or_default().to_string_lossy().to_lowercase().contains(&pattern.to_lowercase()) { results.push(p.clone()); } if p.is_dir() { search_recursive(&p, pattern, results); } } } }

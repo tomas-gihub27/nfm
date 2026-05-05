@@ -21,6 +21,10 @@ chrono = "0.4"
 # but let's try a lightweight approach or just basic colors for editor first to avoid massive compilation.
 # Actually, the user asked for syntax highlighting, syntect is the standard.
 syntect = "5.2"
+aes-gcm = "0.10"
+rand = "0.8"
+sha2 = "0.10"
+md-5 = "0.10"
 
 [profile.release]
 opt-level = 3
