@@ -160,6 +160,16 @@ impl App {
             TaskType::Search(_) => "Searching".to_string(),
             TaskType::Checksum(_) => "Calculating hashes".to_string(),
             TaskType::Delete(_) => "Deleting".to_string(),
+            TaskType::Git(gt) => match gt {
+                crate::file_browser::file_browser::GitTask::Status => "Git Status".to_string(),
+                crate::file_browser::file_browser::GitTask::AddAll => "Git Add All".to_string(),
+                crate::file_browser::file_browser::GitTask::Commit(_) => "Git Commit".to_string(),
+                crate::file_browser::file_browser::GitTask::Push { .. } => "Git Push".to_string(),
+                crate::file_browser::file_browser::GitTask::Pull { .. } => "Git Pull".to_string(),
+                crate::file_browser::file_browser::GitTask::Fetch => "Git Fetch".to_string(),
+                crate::file_browser::file_browser::GitTask::Init => "Git Init".to_string(),
+                crate::file_browser::file_browser::GitTask::RemoteAdd { .. } => "Git Remote Add".to_string(),
+            },
             _ => "Task".to_string(),
         };
         if let TaskType::Copy | TaskType::Move = task_type {
@@ -208,6 +218,18 @@ impl App {
                     }
                 }
                 TaskType::Delete(paths) => { let total = paths.len(); for (i, p) in paths.iter().enumerate() { let _ = sender.send(TaskUpdate::Progress(i as f64 / total as f64, p.to_string_lossy().to_string())); if p.is_dir() { let _ = fs::remove_dir_all(p); } else { let _ = fs::remove_file(p); } } Ok(()) }
+                TaskType::Git(gt) => {
+                    match gt {
+                        crate::file_browser::file_browser::GitTask::Status => run_git_command(&path, &["status"], &sender),
+                        crate::file_browser::file_browser::GitTask::AddAll => run_git_command(&path, &["add", "."], &sender),
+                        crate::file_browser::file_browser::GitTask::Commit(msg) => run_git_command(&path, &["commit", "-m", &msg], &sender),
+                        crate::file_browser::file_browser::GitTask::Push { remote, branch } => run_git_command(&path, &["push", &remote, &branch], &sender),
+                        crate::file_browser::file_browser::GitTask::Pull { remote, branch } => run_git_command(&path, &["pull", &remote, &branch], &sender),
+                        crate::file_browser::file_browser::GitTask::Fetch => run_git_command(&path, &["fetch"], &sender),
+                        crate::file_browser::file_browser::GitTask::Init => run_git_command(&path, &["init"], &sender),
+                        crate::file_browser::file_browser::GitTask::RemoteAdd { name, url } => run_git_command(&path, &["remote", "add", &name, &url], &sender),
+                    }
+                }
             };
 
             match res { Ok(_) => { let _ = sender.send(TaskUpdate::Finished(format!("{} finished", name))); } Err(e) => { let _ = sender.send(TaskUpdate::Finished(format!("Error: {}", e))); } }
@@ -216,6 +238,24 @@ impl App {
 
     fn next_tab(&mut self) { if !self.tabs.is_empty() { self.active_tab = (self.active_tab + 1) % self.tabs.len(); } }
     fn close_tab(&mut self) { if self.tabs.len() > 1 { self.tabs.remove(self.active_tab); if self.active_tab >= self.tabs.len() { self.active_tab = self.tabs.len() - 1; } } else { self.should_quit = true; } }
+}
+
+fn run_git_command(path: &PathBuf, args: &[&str], sender: &Sender<TaskUpdate>) -> std::io::Result<()> {
+    let _ = sender.send(TaskUpdate::Progress(0.3, format!("git {}", args.join(" "))));
+    let output = std::process::Command::new("git").args(args).current_dir(path).output()?;
+    let _ = sender.send(TaskUpdate::Progress(1.0, "Finished".to_string()));
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if stdout.len() > 100 {
+            let _ = sender.send(TaskUpdate::Finished(format!("Success: {}", &stdout[..100])));
+        } else {
+            let _ = sender.send(TaskUpdate::Finished(format!("Success: {}", stdout)));
+        }
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(std::io::Error::new(std::io::ErrorKind::Other, stderr.to_string()))
+    }
 }
 
 fn copy_with_progress(src: &PathBuf, dst: &PathBuf, sender: &Sender<TaskUpdate>) -> std::io::Result<()> {

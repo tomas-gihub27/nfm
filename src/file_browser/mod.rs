@@ -16,11 +16,24 @@ pub mod file_browser {
     pub enum EncType { Xor, AesPlaceholder }
 
     #[derive(Clone, Debug)]
+    pub enum GitTask {
+        Status,
+        AddAll,
+        Commit(String),
+        Push { remote: String, branch: String },
+        Pull { remote: String, branch: String },
+        Fetch,
+        Init,
+        RemoteAdd { name: String, url: String },
+    }
+
+    #[derive(Clone, Debug)]
     pub enum TaskType {
         Copy, Move, Archive(ArchiveType), Unzip, GitClone(String), Wget(String),
         Encrypt { etype: EncType, key: String, output: PathBuf },
         Decrypt { etype: EncType, key: String, output: PathBuf },
         Search(String), Checksum(String), Delete(Vec<PathBuf>),
+        Git(GitTask),
     }
 
     pub enum TabRequest {
@@ -66,6 +79,7 @@ pub mod file_browser {
         Normal,
         Drives,
         Menu(usize),
+        GitMenu(usize),
         Dialog(DialogType),
         Metadata(FileItem),
         Permissions { item: FileItem, grid: [[bool; 3]; 3], row: usize, col: usize },
@@ -82,6 +96,7 @@ pub mod file_browser {
     #[derive(Clone)]
     pub enum DialogAction {
         NewFile, NewFolder, Rename(PathBuf), GitClone, Wget, Symlink(PathBuf), Filter, Search, Duplicate(PathBuf),
+        GitCommit, GitRemoteName, GitRemoteUrl(String),
     }
     
     #[derive(Clone)]
@@ -94,6 +109,7 @@ pub mod file_browser {
         Archive { path: PathBuf, atype: ArchiveType },
         Encrypt { path: PathBuf, etype: EncType },
         Decrypt { path: PathBuf, etype: EncType },
+        GitPush, GitPull, GitRemoteAdd,
     }
 
     pub struct FileBrowserState {
@@ -148,6 +164,7 @@ pub mod file_browser {
                     "Search Files".to_string(), 
                     "Refresh Panel".to_string(), 
                     "Terminal here".to_string(), 
+                    "Git Manager".to_string(),
                     "Settings (Config)".to_string(), 
                     "Preview: Off/On".to_string(), 
                     "Sort by...".to_string(), 
@@ -212,12 +229,66 @@ pub mod file_browser {
                 BrowserMode::Normal => self.handle_normal_key(key, clipboard, config),
                 BrowserMode::Drives => self.handle_drives_key(key),
                 BrowserMode::Menu(_) => self.handle_menu_key(key, clipboard),
+                BrowserMode::GitMenu(_) => self.handle_git_menu_key(key),
                 BrowserMode::Dialog(_) => self.handle_dialog_key(key),
                 BrowserMode::Metadata(_) | BrowserMode::Help => { if key.code != KeyCode::Null { self.mode = BrowserMode::Normal; } None }
                 BrowserMode::Permissions { .. } => self.handle_permissions_key(key),
                 BrowserMode::Selection { .. } => self.handle_selection_key(key),
                 BrowserMode::Form { .. } => self.handle_form_key(key),
             }
+        }
+
+        fn handle_git_menu_key(&mut self, key: KeyEvent) -> Option<TabRequest> {
+            let mut close_menu = false;
+            let mut req = None;
+            if let BrowserMode::GitMenu(idx) = &mut self.mode {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('g') => close_menu = true,
+                    KeyCode::Up => if *idx > 1 { *idx -= 1; },
+                    KeyCode::Down => if *idx < 8 { *idx += 1; },
+                    KeyCode::Enter => {
+                        match *idx {
+                            1 => req = Some(TabRequest::StartTask { task_type: TaskType::Git(GitTask::Status), path: self.current_dir.clone(), target: PathBuf::new() }),
+                            2 => req = Some(TabRequest::StartTask { task_type: TaskType::Git(GitTask::AddAll), path: self.current_dir.clone(), target: PathBuf::new() }),
+                            3 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Commit Message:".to_string(), input: String::new(), action: DialogAction::GitCommit }); return None; }
+                            4 => { self.mode = BrowserMode::Form { 
+                                title: "GIT PUSH".to_string(), 
+                                fields: vec![
+                                    FormField { label: "Remote:".to_string(), value: "origin".to_string(), is_password: false },
+                                    FormField { label: "Branch:".to_string(), value: "main".to_string(), is_password: false }
+                                ], 
+                                active_idx: 0, 
+                                action: FormAction::GitPush 
+                            }; return None; }
+                            5 => { self.mode = BrowserMode::Form { 
+                                title: "GIT PULL".to_string(), 
+                                fields: vec![
+                                    FormField { label: "Remote:".to_string(), value: "origin".to_string(), is_password: false },
+                                    FormField { label: "Branch:".to_string(), value: "main".to_string(), is_password: false }
+                                ], 
+                                active_idx: 0, 
+                                action: FormAction::GitPull 
+                            }; return None; }
+                            6 => req = Some(TabRequest::StartTask { task_type: TaskType::Git(GitTask::Fetch), path: self.current_dir.clone(), target: PathBuf::new() }),
+                            7 => req = Some(TabRequest::StartTask { task_type: TaskType::Git(GitTask::Init), path: self.current_dir.clone(), target: PathBuf::new() }),
+                            8 => { self.mode = BrowserMode::Form { 
+                                title: "ADD REMOTE".to_string(), 
+                                fields: vec![
+                                    FormField { label: "Name:".to_string(), value: "origin".to_string(), is_password: false },
+                                    FormField { label: "URL:".to_string(), value: String::new(), is_password: false }
+                                ], 
+                                active_idx: 0, 
+                                action: FormAction::GitRemoteAdd 
+                            }; return None; }
+                            _ => {}
+                        }
+                        close_menu = true;
+                    }
+                    _ => {}
+                }
+            }
+            if close_menu { self.mode = BrowserMode::Normal; }
+            req
         }
 
         fn handle_normal_key(&mut self, key: KeyEvent, clipboard: &mut Clipboard, config: &Config) -> Option<TabRequest> {
@@ -295,9 +366,10 @@ pub mod file_browser {
                             21 => { self.mode = BrowserMode::Dialog(DialogType::Input { title: "Search pattern:".to_string(), input: String::new(), action: DialogAction::Search }); return None; }
                             22 => { self.refresh(); req = Some(TabRequest::SetStatus("Refreshed".to_string())); }
                             23 => { if cfg!(target_os = "windows") { let _ = std::process::Command::new("cmd").current_dir(&self.current_dir).spawn(); } else { let _ = std::process::Command::new("sh").arg("-c").arg("$TERM").current_dir(&self.current_dir).spawn(); } req = Some(TabRequest::SetStatus("Terminal opened".to_string())); }
-                            24 => { let cp = crate::config::get_config_path(); return Some(TabRequest::OpenEditor(cp)); }
-                            25 => { self.show_preview = !self.show_preview; req = Some(TabRequest::SetStatus(format!("Preview: {}", if self.show_preview { "On" } else { "Off" }))); }
-                            26 => { self.mode = BrowserMode::Selection { title: "Sort by".to_string(), options: vec!["Name (A-Z)".to_string(), "Name (Z-A)".to_string(), "Size (Smallest)".to_string(), "Size (Largest)".to_string(), "Date (Oldest)".to_string(), "Date (Newest)".to_string()], selected: 0, action: SelectionAction::SortMode }; return None; }
+                            24 => { self.mode = BrowserMode::GitMenu(1); return None; }
+                            25 => { let cp = crate::config::get_config_path(); return Some(TabRequest::OpenEditor(cp)); }
+                            26 => { self.show_preview = !self.show_preview; req = Some(TabRequest::SetStatus(format!("Preview: {}", if self.show_preview { "On" } else { "Off" }))); }
+                            27 => { self.mode = BrowserMode::Selection { title: "Sort by".to_string(), options: vec!["Name (A-Z)".to_string(), "Name (Z-A)".to_string(), "Size (Smallest)".to_string(), "Size (Largest)".to_string(), "Date (Oldest)".to_string(), "Date (Newest)".to_string()], selected: 0, action: SelectionAction::SortMode }; return None; }
                             _ => {}
                         }
                         close_menu = true;
@@ -407,6 +479,15 @@ pub mod file_browser {
                                     let target = path.parent().unwrap().join(&fields[1].value);
                                     req = Some(TabRequest::StartTask { task_type: TaskType::Decrypt { etype: *etype, key: fields[0].value.clone(), output: target.clone() }, path: path.clone(), target });
                                 }
+                                FormAction::GitPush => {
+                                    req = Some(TabRequest::StartTask { task_type: TaskType::Git(GitTask::Push { remote: fields[0].value.clone(), branch: fields[1].value.clone() }), path: self.current_dir.clone(), target: PathBuf::new() });
+                                }
+                                FormAction::GitPull => {
+                                    req = Some(TabRequest::StartTask { task_type: TaskType::Git(GitTask::Pull { remote: fields[0].value.clone(), branch: fields[1].value.clone() }), path: self.current_dir.clone(), target: PathBuf::new() });
+                                }
+                                FormAction::GitRemoteAdd => {
+                                    req = Some(TabRequest::StartTask { task_type: TaskType::Git(GitTask::RemoteAdd { name: fields[0].value.clone(), url: fields[1].value.clone() }), path: self.current_dir.clone(), target: PathBuf::new() });
+                                }
                             }
                             next_mode = Some(BrowserMode::Normal);
                         }
@@ -451,6 +532,8 @@ pub mod file_browser {
                                 }
                                 DialogAction::Filter => { self.filter = input.clone(); }
                                 DialogAction::Search => { req = Some(TabRequest::StartTask { task_type: TaskType::Search(input.clone()), path: self.current_dir.clone(), target: PathBuf::new() }); }
+                                DialogAction::GitCommit => { req = Some(TabRequest::StartTask { task_type: TaskType::Git(GitTask::Commit(input.clone())), path: self.current_dir.clone(), target: PathBuf::new() }); }
+                                _ => {}
                             }
                             self.refresh(); next_mode = Some(BrowserMode::Normal);
                         }

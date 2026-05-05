@@ -168,13 +168,17 @@ fn draw_file_browser(f: &mut Frame, state: &mut crate::file_browser::file_browse
                 render_menu_item("Search", 21, *idx), 
                 render_menu_item("Refresh Panel", 22, *idx), 
                 render_menu_item("Terminal", 23, *idx), 
-                render_menu_item("Settings", 24, *idx), 
-                render_menu_item("Preview", 25, *idx), 
-                render_menu_item("Sort", 26, *idx)];
+                render_menu_item("Git Manager", 24, *idx),
+                render_menu_item("Settings", 25, *idx), 
+                render_menu_item("Preview", 26, *idx), 
+                render_menu_item("Sort", 27, *idx)];
             
             f.render_widget(List::new(c1), columns[0]);
             f.render_widget(List::new(c2), columns[1]);
             f.render_widget(List::new(c3), columns[2]);
+        }
+        BrowserMode::GitMenu(idx) => {
+            draw_git_menu(f, *idx, f.size());
         }
         BrowserMode::Dialog(DialogType::Input { title, input, .. }) => {
             let area = centered_rect(50, 15, f.size());
@@ -381,3 +385,47 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 }
 
 fn spans_len(spans: &[Span]) -> usize { spans.iter().map(|s| s.content.len()).sum() }
+
+fn draw_git_menu(f: &mut Frame, selected_idx: usize, area: Rect) {
+    let menu_area = centered_rect(50, 60, area);
+    f.render_widget(Clear, menu_area);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Double)
+        .border_style(Style::default().fg(Color::Rgb(240, 80, 50)))
+        .title(Span::styled("  GIT MANAGER ", Style::default().fg(Color::White).bold()))
+        .title_alignment(Alignment::Center);
+    f.render_widget(block, menu_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3),
+            Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3),
+        ])
+        .split(menu_area);
+
+    let items = [
+        ("Status", "Show working tree status", 1),
+        ("Add All", "Stage all changes (git add .)", 2),
+        ("Commit", "Record changes to repository", 3),
+        ("Push", "Update remote refs", 4),
+        ("Pull", "Fetch from and integrate with another repo", 5),
+        ("Fetch", "Download objects and refs from another repo", 6),
+        ("Init", "Create an empty Git repository", 7),
+        ("Remote Add", "Add a new remote", 8),
+    ];
+
+    for (label, desc, idx) in items {
+        let active = idx == selected_idx;
+        let style = if active { Style::default().bg(Color::Rgb(60, 30, 20)).fg(Color::White).bold() } else { Style::default().fg(Color::Gray) };
+        let text = vec![
+            Line::from(vec![
+                Span::styled(format!(" {:<12} ", label), if active { Style::default().fg(Color::Rgb(255, 100, 50)).bold() } else { Style::default().fg(Color::White) }),
+                Span::styled(format!("- {}", desc), Style::default().fg(Color::DarkGray).italic())
+            ])
+        ];
+        f.render_widget(Paragraph::new(text).block(Block::default().borders(Borders::ALL).border_type(if active { BorderType::Thick } else { BorderType::Plain }).border_style(style)), chunks[idx-1]);
+    }
+}
